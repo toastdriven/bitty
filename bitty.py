@@ -61,9 +61,14 @@ class BaseSQLAdapter(object):
     def get_connection(self, dsn):
         raise NotImplementedError("Subclasses must implement the 'get_connection' method.")
     
-    def raw(self, query, params=[]):
+    def raw(self, query, params=[], commit=True):
         cursor = self.connection.cursor()
-        return cursor.execute(query, params)
+        result = cursor.execute(query, params)
+        
+        if commit:
+            self.connection.commit()
+        
+        return result
     
     def _get_column_names(self, **kwargs):
         raise NotImplementedError("Subclasses must implement the '_get_column_names' method.")

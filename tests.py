@@ -132,6 +132,12 @@ class BittyTestCase(unittest.TestCase):
         self.assertEqual(self.base.raw("INSERT INTO people (id, name, age) VALUES (1, 'Daniel', 27);").rowcount, 1)
         self.assertEqual(self.base.raw("UPDATE people SET name = 'Toast Driven' WHERE id = 1;").rowcount, 1)
         self.assertEqual(self.base.raw("DELETE FROM people WHERE id = 1;").rowcount, 1)
+    
+    def test_regression_commit(self):
+        self.assertEqual(self.base.add('people', name='Toasty'), True)
+        
+        alternate = Bitty("sqlite://%s" % self.db_name)
+        self.assertEqual(alternate.find('people', name='Toasty'), [{'age': None, 'id': 4, 'name': u'Toasty'}])
 
 
 if __name__ == '__main__':
