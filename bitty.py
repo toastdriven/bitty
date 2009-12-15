@@ -20,7 +20,7 @@ Example::
         print row['name']
 
 You're responsible for your own schema. bitty does the smallest amount of
-introspection it can to get by. bitty supports the usual CRUD method.
+introspection it can to get by. bitty supports the usual CRUD methods.
 
 Tastes great when used with itty. Serious Python Programmers™ with Enterprise
 Requirements need not apply.
