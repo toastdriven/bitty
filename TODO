@@ -1,0 +1,16 @@
++ Swappable backends. (v0.1)
++ Basic CRUD methods. (v0.1)
++ SQLite implementation. (v0.1)
++ Lookup methods supported by ``.find()``. (v0.2)
+  + ``FOO__in``
+  + ``FOO__lt``
+  + ``FOO__lte``
+  + ``FOO__gt``
+  + ``FOO__gte``
+  + ``FOO__startswith``
+  + ``FOO__endswith``
+  + ``FOO__contains``
+- JSON backend. (v0.3)
+- More examples. (v0.3)
+- Postgres backend. (v0.4)
+- MySQL backend. (v0.5)
