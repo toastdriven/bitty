@@ -50,6 +50,20 @@ class BaseSQLAdapterTestCase(unittest.TestCase):
     def test_get_column_names(self):
         self.assertEqual(self.base._get_column_names('people'), ['age', 'id', 'name'])
         self.assertEqual(self.base._get_column_names('test'), ['id', 'text'])
+    
+    def test_build_where_clause(self):
+        self.assertEqual(self.base._build_where_clause(id=1), ('WHERE id = ?', [1]))
+        self.assertEqual(self.base._build_where_clause(id=1, name='Daniel'), ('WHERE id = ? AND name = ?', [1, 'Daniel']))
+        self.assertEqual(self.base._build_where_clause(name__startswith='Daniel'), ('WHERE name LIKE ?', ['Daniel%']))
+        self.assertEqual(self.base._build_where_clause(name__endswith='Daniel'), ("WHERE name LIKE ?", ['%Daniel']))
+        self.assertEqual(self.base._build_where_clause(name__contains='Daniel'), ("WHERE name LIKE ?", ['%Daniel%']))
+        self.assertEqual(self.base._build_where_clause(id__lt=10), ('WHERE id < ?', [10]))
+        self.assertEqual(self.base._build_where_clause(id__lte=10), ('WHERE id <= ?', [10]))
+        self.assertEqual(self.base._build_where_clause(id__gt=10), ('WHERE id > ?', [10]))
+        self.assertEqual(self.base._build_where_clause(id__gte=10), ('WHERE id >= ?', [10]))
+        self.assertEqual(self.base._build_where_clause(id__in=[1, 2, 10]), ('WHERE id IN (?, ?, ?)', [1, 2, 10]))
+        # The motherload.
+        self.assertEqual(self.base._build_where_clause(id=1, name='Daniel', lastname__startswith='Daniel', firstname__endswith='Daniel', address__contains='Daniel', age__lt=30, zip__lte=99999, favorite_count__gt=15, comments__gte=34, status__in=['active', 'banned']), ('WHERE address LIKE ? AND age < ? AND comments >= ? AND favorite_count > ? AND firstname LIKE ? AND id = ? AND lastname LIKE ? AND name = ? AND status IN (?, ?) AND zip <= ?', ['%Daniel%', 30, 34, 15, '%Daniel', 1, 'Daniel%', 'Daniel', 'active', 'banned', 99999]))
 
 
 class BittyTestCase(unittest.TestCase):
@@ -102,6 +116,11 @@ class BittyTestCase(unittest.TestCase):
         self.assertEqual(self.base.find('people', name='Daniel'), [{'age': 27, 'id': 1, 'name': u'Daniel'}])
         self.assertEqual(self.base.find('people', id=1, name='Daniel'), [{'age': 27, 'id': 1, 'name': u'Daniel'}])
         self.assertEqual(self.base.find('test', text='Daniel'), [])
+        
+        # Test advanced lookups.
+        self.assertEqual(self.base.find('people', id__gte=1), [{'age': 27, 'id': 1, 'name': u'Daniel'}, {'age': 7, 'id': 2, 'name': u'Foo'}, {'age': 35, 'id': 3, 'name': u'Moof'}])
+        self.assertEqual(self.base.find('people', id__gte=1, name__startswith='Dan'), [{'age': 27, 'id': 1, 'name': u'Daniel'}])
+        self.assertEqual(self.base.find('people', name__contains='a'), [{'age': 27, 'id': 1, 'name': u'Daniel'}])
     
     def test_get(self):
         self.assertEqual(self.base.get('people', name='Daniel'), {'age': 27, 'id': 1, 'name': u'Daniel'})

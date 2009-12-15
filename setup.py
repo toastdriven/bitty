@@ -4,8 +4,8 @@ from distutils.core import setup
 
 setup(
     name='bitty',
-    version='0.1',
-    description='Simple database access.',
+    version='0.2',
+    description='A tiny database layer. Serious Python Programmers(tm) with Enterprise Requirements need not apply.',
     author='Daniel Lindsley',
     author_email='daniel@toastdriven.com',
     url='http://github.com/toastdriven/bitty',

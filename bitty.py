@@ -29,7 +29,7 @@ import re
 
 
 __author__ = 'Daniel Lindsley'
-__version__ = ('0', '1')
+__version__ = ('0', '2')
 
 
 FILESYSTEM_DSN = re.compile(r'^(?P<adapter>\w+)://(?P<path>.*)$')
@@ -44,6 +44,16 @@ class InvalidDSN(BittyError): pass
 
 
 class BaseSQLAdapter(object):
+    FILTER_OPTIONS = {
+        'lt': "%s < ?",
+        'lte': "%s <= ?",
+        'gt': "%s > ?",
+        'gte': "%s >= ?",
+        'startswith': "%s LIKE ?",
+        'endswith': "%s LIKE ?",
+        'contains': "%s LIKE ?",
+    }
+    
     def __init__(self, dsn):
         self.connection = self.get_connection(dsn)
         self._tables = {}
@@ -65,6 +75,48 @@ class BaseSQLAdapter(object):
         query = "INSERT INTO %s (%s) VALUES (%s)" % (table, ', '.join(column_names), ', '.join(binds))
         return query, values
     
+    def _build_where_clause(self, **kwargs):
+        if len(kwargs) == 0:
+            return '', []
+        
+        clauses = []
+        bind_params = []
+        
+        keys = sorted(kwargs.keys())
+        
+        for column_spec in keys:
+            value = kwargs[column_spec]
+            column_info = column_spec.split('__')
+            
+            if len(column_info) > 2:
+                raise QueryError("'%s' is not a supported lookup. Only one set of '__' is allowed." % column_spec)
+            
+            if len(column_info) == 1:
+                clauses.append("%s = ?" % column_info[0])
+                bind_params.append(value)
+            else:
+                if column_info[1] == 'in':
+                    placeholders = ['?' for val in value]
+                    clauses.append("%s IN (%s)" % (column_info[0], ', '.join(placeholders)))
+                    bind_params.extend([val for val in value])
+                elif column_info[1] in self.FILTER_OPTIONS:
+                    clauses.append(self.FILTER_OPTIONS[column_info[1]] % column_info[0])
+                    
+                    if column_info[1] in ('startswith', 'contains'):
+                        value = "%s%%" % value
+                    
+                    if column_info[1] in ('endswith', 'contains'):
+                        value = "%%%s" % value
+                    
+                    bind_params.append(value)
+                else:
+                    # Assume an exact lookup.
+                    clauses.append("%s = ?" % column_info[0])
+                    bind_params.append(value)
+        
+        final_clause = "WHERE %s" % ' AND '.join(clauses)
+        return final_clause, bind_params
+    
     def _build_update_query(self, table, pk, **kwargs):
         column_names = sorted(kwargs.keys())
         values = [kwargs[name] for name in column_names]
@@ -80,15 +132,13 @@ class BaseSQLAdapter(object):
     
     def _build_select_query(self, table, **kwargs):
         all_column_names = self._get_column_names(table)
-        where_column_names = sorted(kwargs.keys())
-        values = [kwargs[name] for name in where_column_names]
-        where = ["%s = ?" % name for name in where_column_names]
+        where_clause, where_values = self._build_where_clause(**kwargs)
         query = "SELECT %s FROM %s" % (', '.join(all_column_names), table)
         
         if len(kwargs):
-            query = "%s WHERE %s" % (query, ' AND '.join(where))
+            query = "%s %s" % (query, where_clause)
         
-        return query, values
+        return query, where_values
     
     def add(self, table, **kwargs):
         if not len(kwargs):
@@ -126,6 +176,16 @@ class BaseSQLAdapter(object):
 
 
 class SQLiteAdapter(BaseSQLAdapter):
+    FILTER_OPTIONS = {
+        'lt': "%s < ?",
+        'lte': "%s <= ?",
+        'gt': "%s > ?",
+        'gte': "%s >= ?",
+        'startswith': "%s LIKE ? ESCAPE '\\'",
+        'endswith': "%s LIKE ? ESCAPE '\\'",
+        'contains': "%s LIKE ? ESCAPE '\\'",
+    }
+    
     def get_connection(self, dsn):
         match = FILESYSTEM_DSN.match(dsn)
         

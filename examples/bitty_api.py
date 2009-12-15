@@ -23,13 +23,13 @@ if len(bit.find('people', id=1)):
     for result in bit.find('people', id=1):
         print result['name']
 
-for result in bit.find('people', name=['Moriah', 'Sean']):
+for result in bit.find('people', name__in=['Moriah', 'Sean']):
     print result['name']
 
 for result in bit.find('people', age__lte=20):
     print result['name']
 
-for result in bit.find('people', name=['Moriah', 'Sean'], age__lte=20):
+for result in bit.find('people', name__in=['Moriah', 'Sean'], age__lte=20):
     print result['name']
 
 # Delete?
