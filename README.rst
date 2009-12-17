@@ -29,6 +29,8 @@ Example
     
     bit.close()
 
+See ``examples/`` and ``tests.py`` for more usages.
+
 
 Supported Backends
 ==================
@@ -45,12 +47,17 @@ You're responsible for your own schema. bitty does the smallest amount of
 introspection it can to get by.
 
 
-When to use ``bitty``?
-======================
+When to use bitty?
+==================
 
 ``bitty`` is best used in environments like resource-based APIs and when 
 integrating with other software (like a bigger web framework).
 
-Tastes great when used with ``itty`` (http://github.com/toastdriven/itty).
+Tastes great when used with itty_.
 
 Serious Python Programmers™ with Enterprise Requirements need not apply.
+
+.. _itty: http://github.com/toastdriven/itty
+
+:author: Daniel Lindsley
+:date: 2009-12-17
