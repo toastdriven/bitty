@@ -54,7 +54,3 @@ integrating with other software (like a bigger web framework).
 Tastes great when used with ``itty`` (http://github.com/toastdriven/itty).
 
 Serious Python Programmers™ with Enterprise Requirements need not apply.
-
-
-:author: Daniel Lindsley
-:date: 2009-12-16
