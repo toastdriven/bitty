@@ -4,7 +4,7 @@ from distutils.core import setup
 
 setup(
     name='bitty',
-    version='0.3',
+    version='0.4',
     description='A tiny database layer. Serious Python Programmers(tm) with Enterprise Requirements need not apply.',
     author='Daniel Lindsley',
     author_email='daniel@toastdriven.com',

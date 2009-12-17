@@ -1,11 +1,12 @@
+=========
 ``bitty``
 =========
 
-A tiny database layer.
+A tiny storage layer.
 
 
-Why another database layer?
----------------------------
+Why another storage layer?
+==========================
 
 I wanted one that was small (both in terms of a single file and in actual kloc),
 tested and could handle multiple data stores. And because it was fun.
@@ -29,15 +30,23 @@ Example
     bit.close()
 
 
+Supported Backends
+==================
+
+* SQLite
+* Postgres
+* MySQL
+
+
 Schema
-------
+======
 
 You're responsible for your own schema. bitty does the smallest amount of
 introspection it can to get by.
 
 
 When to use ``bitty``?
-----------------------
+======================
 
 ``bitty`` is best used in environments like resource-based APIs and when 
 integrating with other software (like a bigger web framework).
@@ -48,4 +57,4 @@ Serious Python Programmers™ with Enterprise Requirements need not apply.
 
 
 :author: Daniel Lindsley
-:date: 2009-12-14
+:date: 2009-12-16

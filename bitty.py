@@ -31,7 +31,7 @@ import re
 
 
 __author__ = 'Daniel Lindsley'
-__version__ = ('0', '3')
+__version__ = ('0', '4')
 
 
 FILESYSTEM_DSN = re.compile(r'^(?P<adapter>\w+)://(?P<path>.*)$')
@@ -44,7 +44,7 @@ class InvalidDSN(BittyError): pass
 
 
 class BaseSQLAdapter(object):
-    BINDING_OP = '?'
+    BINDING_OP = '%s'
     FILTER_OPTIONS = {
         'lt': "%s < %s",
         'lte': "%s <= %s",
@@ -66,7 +66,7 @@ class BaseSQLAdapter(object):
         cursor = self.connection.cursor()
         
         try:
-            result = cursor.execute(query, params)
+            cursor.execute(query, params)
             
             if commit:
                 self.connection.commit()
@@ -74,7 +74,7 @@ class BaseSQLAdapter(object):
             self.connection.rollback()
             raise
         
-        return result
+        return cursor
     
     def _get_column_names(self, **kwargs):
         raise NotImplementedError("Subclasses must implement the '_get_column_names' method.")
@@ -193,6 +193,7 @@ class BaseSQLAdapter(object):
 
 
 class SQLiteAdapter(BaseSQLAdapter):
+    BINDING_OP = '?'
     FILTER_OPTIONS = {
         'lt': "%s < %s",
         'lte': "%s <= %s",
@@ -214,6 +215,21 @@ class SQLiteAdapter(BaseSQLAdapter):
         import sqlite3
         return sqlite3.connect(details['path'])
     
+    def raw(self, query, params=[], commit=True):
+        cursor = self.connection.cursor()
+        
+        # SQLite returns a new cursor. Use that instead.
+        try:
+            result = cursor.execute(query, params)
+            
+            if commit:
+                self.connection.commit()
+        except:
+            self.connection.rollback()
+            raise
+        
+        return result
+    
     def _get_column_names(self, table):
         if not table in self._tables:
             result = self.raw("SELECT * FROM %s" % table)
@@ -223,8 +239,6 @@ class SQLiteAdapter(BaseSQLAdapter):
 
 
 class PostgresAdapter(BaseSQLAdapter):
-    BINDING_OP = '%s'
-    
     def get_connection(self, dsn):
         match = DAEMON_DSN.match(dsn)
         
@@ -235,21 +249,6 @@ class PostgresAdapter(BaseSQLAdapter):
         
         import psycopg2
         return psycopg2.connect("dbname='%s' user='%s' host='%s' password='%s'" % (details['database'], details['user'], details['host'], details['password']))
-    
-    def raw(self, query, params=[], commit=True):
-        cursor = self.connection.cursor()
-        
-        # Postgres doesn't return a new cursor. Work with the previous one.
-        try:
-            result = cursor.execute(query, params)
-            
-            if commit:
-                self.connection.commit()
-        except:
-            self.connection.rollback()
-            raise
-        
-        return cursor
     
     def _get_column_names(self, table):
         query = "SELECT a.attname AS column \
@@ -275,11 +274,48 @@ class PostgresAdapter(BaseSQLAdapter):
         return self._tables[table]
 
 
+class MySQLAdapter(BaseSQLAdapter):
+    def get_connection(self, dsn):
+        match = DAEMON_DSN.match(dsn)
+        
+        if not match:
+            raise InvalidDSN("'mysql' adapter received an invalid DSN '%s'." % dsn)
+        
+        details = match.groupdict()
+        connection_details = {}
+        
+        for key, value in details.items():
+            if key == 'database':
+                connection_details['db'] = details['database']
+            elif key == 'user':
+                connection_details['user'] = details['user']
+            elif key == 'host':
+                connection_details['host'] = details['host']
+            elif key == 'password':
+                connection_details['passwd'] = details['password']
+        
+        import MySQLdb
+        return MySQLdb.connect(**connection_details)
+    
+    def _get_column_names(self, table):
+        query = "DESC %s;" % table
+        
+        if not table in self._tables:
+            result = self.raw(query, commit=False)
+            
+            if not result:
+                raise QueryError("Table '%s' was not found or has no columns." % table)
+            
+            self._tables[table] = sorted([column[0] for column in result.fetchall()])
+        
+        return self._tables[table]
+
+
 class Bitty(object):
     ADAPTERS = {
         'sqlite': SQLiteAdapter,
         # 'json': JSONAdapter,
-        # 'mysql': MySQLAdapter,
+        'mysql': MySQLAdapter,
         'postgres': PostgresAdapter,
     }
     
@@ -288,7 +324,8 @@ class Bitty(object):
         Valid DSNs::
         
             * sqlite:///Users/daniellindsley/test.db
-            * postgres://daniel:my_p4ss@localhost:5432
+            * postgres://daniel:my_p4ss@localhost:5432/test_db
+            * mysql://daniel:my_p4ss@localhost/test_db
         """
         self.dsn = dsn
         self.adapter = self.get_adapter()
