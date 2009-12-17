@@ -25,6 +25,8 @@ Example
     # Select all.
     for row in bitty.find('people'):
         print row['name']
+    
+    bit.close()
 
 
 Schema

@@ -1,5 +1,6 @@
 from bitty import *
 import os
+import psycopg2
 import sqlite3
 import unittest
 
@@ -30,9 +31,9 @@ class BaseSQLAdapterTestCase(unittest.TestCase):
     def test_build_update_query(self):
         self.assertEqual(self.base._build_update_query('people', 1, name='Daniel'), ('UPDATE people SET name = ? WHERE id = ?', ['Daniel', 1]))
         self.assertEqual(self.base._build_update_query('people', 1, age=27), ('UPDATE people SET age = ? WHERE id = ?', [27, 1]))
-        self.assertEqual(self.base._build_update_query('people', 2, name='Daniel', age=27), ('UPDATE people SET age = ? AND name = ? WHERE id = ?', [27, 'Daniel', 2]))
+        self.assertEqual(self.base._build_update_query('people', 2, name='Daniel', age=27), ('UPDATE people SET age = ?, name = ? WHERE id = ?', [27, 'Daniel', 2]))
         self.assertEqual(self.base._build_update_query('people', 10, name='Daniel'), ('UPDATE people SET name = ? WHERE id = ?', ['Daniel', 10]))
-        self.assertEqual(self.base._build_update_query('test', 10, name='Daniel', age=27), ('UPDATE test SET age = ? AND name = ? WHERE id = ?', [27, 'Daniel', 10]))
+        self.assertEqual(self.base._build_update_query('test', 10, name='Daniel', age=27), ('UPDATE test SET age = ?, name = ? WHERE id = ?', [27, 'Daniel', 10]))
     
     def test_build_delete_query(self):
         self.assertEqual(self.base._build_delete_query('people', 1), ('DELETE FROM people WHERE id = ?', [1]))
@@ -66,9 +67,9 @@ class BaseSQLAdapterTestCase(unittest.TestCase):
         self.assertEqual(self.base._build_where_clause(id=1, name='Daniel', lastname__startswith='Daniel', firstname__endswith='Daniel', address__contains='Daniel', age__lt=30, zip__lte=99999, favorite_count__gt=15, comments__gte=34, status__in=['active', 'banned']), ('WHERE address LIKE ? AND age < ? AND comments >= ? AND favorite_count > ? AND firstname LIKE ? AND id = ? AND lastname LIKE ? AND name = ? AND status IN (?, ?) AND zip <= ?', ['%Daniel%', 30, 34, 15, '%Daniel', 1, 'Daniel%', 'Daniel', 'active', 'banned', 99999]))
 
 
-class BittyTestCase(unittest.TestCase):
+class SQLiteTestCase(unittest.TestCase):
     def setUp(self):
-        super(BittyTestCase, self).setUp()
+        super(SQLiteTestCase, self).setUp()
         self.db_name = '/tmp/bitty_test.db'
         
         if os.path.exists(self.db_name):
@@ -138,6 +139,84 @@ class BittyTestCase(unittest.TestCase):
         
         alternate = Bitty("sqlite://%s" % self.db_name)
         self.assertEqual(alternate.find('people', name='Toasty'), [{'age': None, 'id': 4, 'name': u'Toasty'}])
+
+
+class PostgresTestCase(unittest.TestCase):
+    def setUp(self):
+        super(PostgresTestCase, self).setUp()
+        self.base = Bitty("postgres://postgres:@localhost/bitty_test")
+        
+        try:
+            self.base.raw("""DROP TABLE people;""")
+        except:
+            self.base.adapter.connection.rollback()
+        
+        try:
+            self.base.raw("""DROP TABLE test;""")
+        except:
+            self.base.adapter.connection.rollback()
+        
+        self.base.raw("""CREATE TABLE people (id SERIAL UNIQUE, name VARCHAR(255), age INTEGER NULL);""")
+        self.base.raw("""CREATE TABLE test (id SERIAL UNIQUE, text VARCHAR(255));""")
+        
+        self.base.raw("""INSERT INTO people (name, age) VALUES ('Daniel', 27);""")
+        self.base.raw("""INSERT INTO people (name, age) VALUES ('Foo', 7);""")
+        self.base.raw("""INSERT INTO people (name, age) VALUES ('Moof', 35);""")
+        self.base.raw("""INSERT INTO test (text) VALUES ('moof');""")
+    
+    def tearDown(self):
+        self.base.close()
+        super(PostgresTestCase, self).tearDown()
+    
+    def test_get_adapter(self):
+        self.assertRaises(InvalidDSN, self.base.get_adapter, 'foo')
+        self.assertRaises(InvalidDSN, self.base.get_adapter, 'foo://bar')
+        self.assertRaises(InvalidDSN, self.base.get_adapter, 'postgres://localhost/test')
+        self.assert_(isinstance(self.base.get_adapter("postgres://postgres:@localhost/bitty_test"), PostgresAdapter))
+    
+    def test_add(self):
+        self.assertEqual(self.base.add('people', name='Daniel'), True)
+        self.assertEqual(self.base.add('people', name='Daniel', age=27), True)
+        self.assertRaises(psycopg2.IntegrityError, self.base.add, 'people', id=1, name='Daniel')
+        self.assertEqual(self.base.add('people', name='Daniel'), True)
+        self.assertEqual(self.base.add('test', text='foo'), True)
+    
+    def test_update(self):
+        self.assertEqual(self.base.update('people', 1, name='Daniel'), True)
+        self.assertEqual(self.base.update('people', 1, age=27), True)
+        self.assertEqual(self.base.update('people', 2, name='Daniel', age=27), True)
+        self.assertEqual(self.base.update('people', 10, name='Daniel'), False)
+        self.assertEqual(self.base.update('test', 1, text='bar'), True)
+    
+    def test_delete(self):
+        self.assertEqual(self.base.delete('people', 1), True)
+        self.assertEqual(self.base.delete('people', 2), True)
+        self.assertEqual(self.base.delete('people', 10), False)
+        # Wrong kind of pk.
+        self.assertEqual(self.base.delete('test', '100'), False)
+    
+    def test_find(self):
+        self.assertEqual(self.base.find('people'), [{'age': 27, 'id': 1, 'name': u'Daniel'}, {'age': 7, 'id': 2, 'name': u'Foo'}, {'age': 35, 'id': 3, 'name': u'Moof'}])
+        self.assertEqual(self.base.find('people', id=1), [{'age': 27, 'id': 1, 'name': u'Daniel'}])
+        self.assertEqual(self.base.find('people', name='Daniel'), [{'age': 27, 'id': 1, 'name': u'Daniel'}])
+        self.assertEqual(self.base.find('people', id=1, name='Daniel'), [{'age': 27, 'id': 1, 'name': u'Daniel'}])
+        self.assertEqual(self.base.find('test', text='Daniel'), [])
+        
+        # Test advanced lookups.
+        self.assertEqual(self.base.find('people', id__gte=1), [{'age': 27, 'id': 1, 'name': u'Daniel'}, {'age': 7, 'id': 2, 'name': u'Foo'}, {'age': 35, 'id': 3, 'name': u'Moof'}])
+        self.assertEqual(self.base.find('people', id__gte=1, name__startswith='Dan'), [{'age': 27, 'id': 1, 'name': u'Daniel'}])
+        self.assertEqual(self.base.find('people', name__contains='a'), [{'age': 27, 'id': 1, 'name': u'Daniel'}])
+    
+    def test_get(self):
+        self.assertEqual(self.base.get('people', name='Daniel'), {'age': 27, 'id': 1, 'name': u'Daniel'})
+        self.assertEqual(self.base.get('people', id=1, name='Daniel'), {'age': 27, 'id': 1, 'name': u'Daniel'})
+        self.assertEqual(self.base.get('people', id=1, name='Daniel', age=27), {'age': 27, 'id': 1, 'name': u'Daniel'})
+    
+    def test_raw(self):
+        self.assertEqual(self.base.raw("DELETE FROM people;").rowcount, 3)
+        self.assertEqual(self.base.raw("INSERT INTO people (id, name, age) VALUES (1, 'Daniel', 27);").rowcount, 1)
+        self.assertEqual(self.base.raw("UPDATE people SET name = 'Toast Driven' WHERE id = 1;").rowcount, 1)
+        self.assertEqual(self.base.raw("DELETE FROM people WHERE id = 1;").rowcount, 1)
 
 
 if __name__ == '__main__':

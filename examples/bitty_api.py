@@ -32,8 +32,12 @@ for result in bit.find('people', age__lte=20):
 for result in bit.find('people', name__in=['Moriah', 'Sean'], age__lte=20):
     print result['name']
 
-# Delete?
+# Delete.
 bit.delete('people', 1)
+
+# (Optional) Close.
+# Be nice to your DB!
+bit.close()
 
 # Nuke the DB so this script can be run standalone.
 os.remove('test.db')

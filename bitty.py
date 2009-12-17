@@ -18,6 +18,8 @@ Example::
     # Select all.
     for row in bitty.find('people'):
         print row['name']
+    
+    bit.close()
 
 You're responsible for your own schema. bitty does the smallest amount of
 introspection it can to get by. bitty supports the usual CRUD methods.
@@ -29,13 +31,11 @@ import re
 
 
 __author__ = 'Daniel Lindsley'
-__version__ = ('0', '2')
+__version__ = ('0', '3')
 
 
 FILESYSTEM_DSN = re.compile(r'^(?P<adapter>\w+)://(?P<path>.*)$')
-# DRL_FIXME - Make sure this is standardish.
-# DRL_FIXME: Handle port?
-DAEMON_DSN = re.compile(r'^(?P<adapter>\w+)://(?P<user>[\w\d_.-]+):(?P<pass>[\w\d_.-]+)@(?P<host>.*)$')
+DAEMON_DSN = re.compile(r'^(?P<adapter>\w+)://(?P<user>[\w\d_.-]+):(?P<password>[\w\d_.-]*?)@(?P<host>.*?)/(?P<database>.*?)$')
 
 
 class BittyError(Exception): pass
@@ -44,14 +44,15 @@ class InvalidDSN(BittyError): pass
 
 
 class BaseSQLAdapter(object):
+    BINDING_OP = '?'
     FILTER_OPTIONS = {
-        'lt': "%s < ?",
-        'lte': "%s <= ?",
-        'gt': "%s > ?",
-        'gte': "%s >= ?",
-        'startswith': "%s LIKE ?",
-        'endswith': "%s LIKE ?",
-        'contains': "%s LIKE ?",
+        'lt': "%s < %s",
+        'lte': "%s <= %s",
+        'gt': "%s > %s",
+        'gte': "%s >= %s",
+        'startswith': "%s LIKE %s",
+        'endswith': "%s LIKE %s",
+        'contains': "%s LIKE %s",
     }
     
     def __init__(self, dsn):
@@ -63,10 +64,15 @@ class BaseSQLAdapter(object):
     
     def raw(self, query, params=[], commit=True):
         cursor = self.connection.cursor()
-        result = cursor.execute(query, params)
         
-        if commit:
-            self.connection.commit()
+        try:
+            result = cursor.execute(query, params)
+            
+            if commit:
+                self.connection.commit()
+        except:
+            self.connection.rollback()
+            raise
         
         return result
     
@@ -76,7 +82,7 @@ class BaseSQLAdapter(object):
     def _build_insert_query(self, table, **kwargs):
         column_names = sorted(kwargs.keys())
         values = [kwargs[name] for name in column_names]
-        binds = ['?' for value in values]
+        binds = [self.BINDING_OP for value in values]
         query = "INSERT INTO %s (%s) VALUES (%s)" % (table, ', '.join(column_names), ', '.join(binds))
         return query, values
     
@@ -97,15 +103,15 @@ class BaseSQLAdapter(object):
                 raise QueryError("'%s' is not a supported lookup. Only one set of '__' is allowed." % column_spec)
             
             if len(column_info) == 1:
-                clauses.append("%s = ?" % column_info[0])
+                clauses.append("%s = %s" % (column_info[0], self.BINDING_OP))
                 bind_params.append(value)
             else:
                 if column_info[1] == 'in':
-                    placeholders = ['?' for val in value]
+                    placeholders = [self.BINDING_OP for val in value]
                     clauses.append("%s IN (%s)" % (column_info[0], ', '.join(placeholders)))
                     bind_params.extend([val for val in value])
                 elif column_info[1] in self.FILTER_OPTIONS:
-                    clauses.append(self.FILTER_OPTIONS[column_info[1]] % column_info[0])
+                    clauses.append(self.FILTER_OPTIONS[column_info[1]] % (column_info[0], self.BINDING_OP))
                     
                     if column_info[1] in ('startswith', 'contains'):
                         value = "%s%%" % value
@@ -116,7 +122,7 @@ class BaseSQLAdapter(object):
                     bind_params.append(value)
                 else:
                     # Assume an exact lookup.
-                    clauses.append("%s = ?" % column_info[0])
+                    clauses.append("%s = %s" % (column_info[0], self.BINDING_OP))
                     bind_params.append(value)
         
         final_clause = "WHERE %s" % ' AND '.join(clauses)
@@ -127,12 +133,12 @@ class BaseSQLAdapter(object):
         values = [kwargs[name] for name in column_names]
         # Add on the pk.
         values.append(pk)
-        where = ["%s = ?" % name for name in column_names]
-        query = "UPDATE %s SET %s WHERE id = ?" % (table, ' AND '.join(where))
+        where = ["%s = %s" % (name, self.BINDING_OP) for name in column_names]
+        query = "UPDATE %s SET %s WHERE id = %s" % (table, ', '.join(where), self.BINDING_OP)
         return query, values
     
     def _build_delete_query(self, table, pk):
-        query = "DELETE FROM %s WHERE id = ?" % table
+        query = "DELETE FROM %s WHERE id = %s" % (table, self.BINDING_OP)
         return query, [pk]
     
     def _build_select_query(self, table, **kwargs):
@@ -165,7 +171,7 @@ class BaseSQLAdapter(object):
     
     def find(self, table, **kwargs):
         query, values = self._build_select_query(table, **kwargs)
-        result = self.raw(query, params=values)
+        result = self.raw(query, params=values, commit=False)
         rows = []
         column_names = self._get_column_names(table)
         
@@ -178,17 +184,23 @@ class BaseSQLAdapter(object):
             rows.append(row_info)
         
         return rows
+    
+    def close(self, commit=True):
+        if commit:
+            self.connection.commit()
+        
+        return self.connection.close()
 
 
 class SQLiteAdapter(BaseSQLAdapter):
     FILTER_OPTIONS = {
-        'lt': "%s < ?",
-        'lte': "%s <= ?",
-        'gt': "%s > ?",
-        'gte': "%s >= ?",
-        'startswith': "%s LIKE ? ESCAPE '\\'",
-        'endswith': "%s LIKE ? ESCAPE '\\'",
-        'contains': "%s LIKE ? ESCAPE '\\'",
+        'lt': "%s < %s",
+        'lte': "%s <= %s",
+        'gt': "%s > %s",
+        'gte': "%s >= %s",
+        'startswith': "%s LIKE %s ESCAPE '\\'",
+        'endswith': "%s LIKE %s ESCAPE '\\'",
+        'contains': "%s LIKE %s ESCAPE '\\'",
     }
     
     def get_connection(self, dsn):
@@ -210,12 +222,65 @@ class SQLiteAdapter(BaseSQLAdapter):
         return self._tables[table]
 
 
+class PostgresAdapter(BaseSQLAdapter):
+    BINDING_OP = '%s'
+    
+    def get_connection(self, dsn):
+        match = DAEMON_DSN.match(dsn)
+        
+        if not match:
+            raise InvalidDSN("'postgres' adapter received an invalid DSN '%s'." % dsn)
+        
+        details = match.groupdict()
+        
+        import psycopg2
+        return psycopg2.connect("dbname='%s' user='%s' host='%s' password='%s'" % (details['database'], details['user'], details['host'], details['password']))
+    
+    def raw(self, query, params=[], commit=True):
+        cursor = self.connection.cursor()
+        
+        # Postgres doesn't return a new cursor. Work with the previous one.
+        try:
+            result = cursor.execute(query, params)
+            
+            if commit:
+                self.connection.commit()
+        except:
+            self.connection.rollback()
+            raise
+        
+        return cursor
+    
+    def _get_column_names(self, table):
+        query = "SELECT a.attname AS column \
+        FROM pg_catalog.pg_attribute a \
+        WHERE a.attnum > 0 \
+        AND NOT a.attisdropped \
+        AND a.attrelid = ( \
+            SELECT c.oid \
+            FROM pg_catalog.pg_class c \
+            LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace \
+            WHERE c.relname ~ '^(%s)$' \
+            AND pg_catalog.pg_table_is_visible(c.oid) \
+        );" % table
+        
+        if not table in self._tables:
+            result = self.raw(query.replace('\n', '').replace('\'', "'"), commit=False)
+            
+            if not result:
+                raise QueryError("Table '%s' was not found or has no columns." % table)
+            
+            self._tables[table] = sorted([column[0] for column in result.fetchall()])
+        
+        return self._tables[table]
+
+
 class Bitty(object):
     ADAPTERS = {
         'sqlite': SQLiteAdapter,
-        # 'json': {'module': 'json', 'dsn_regex': FILESYSTEM_DSN},
-        # 'mysql': {'module': 'mysqldb', 'dsn_regex': DAEMON_DSN},
-        # 'postgres': {'module': 'postgres_pyscopg2', 'dsn_regex': DAEMON_DSN},
+        # 'json': JSONAdapter,
+        # 'mysql': MySQLAdapter,
+        'postgres': PostgresAdapter,
     }
     
     def __init__(self, dsn):
@@ -266,3 +331,6 @@ class Bitty(object):
     
     def raw(self, query, **kwargs):
         return self.adapter.raw(query, **kwargs)
+    
+    def close(self, commit=True):
+        return self.adapter.close(commit=commit)
