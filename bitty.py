@@ -31,7 +31,7 @@ import re
 
 
 __author__ = 'Daniel Lindsley'
-__version__ = ('0', '4')
+__version__ = ('0', '5', '0', 'alpha')
 
 
 FILESYSTEM_DSN = re.compile(r'^(?P<adapter>\w+)://(?P<path>.*)$')

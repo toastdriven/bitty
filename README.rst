@@ -1,6 +1,6 @@
-=========
-``bitty``
-=========
+========
+bitty.py
+========
 
 A tiny storage layer.
 
