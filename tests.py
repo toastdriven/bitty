@@ -145,7 +145,7 @@ class SQLiteTestCase(unittest.TestCase):
 class PostgresTestCase(unittest.TestCase):
     def setUp(self):
         super(PostgresTestCase, self).setUp()
-        self.base = Bitty("postgres://postgres:@localhost/bitty_test")
+        self.base = Bitty("postgres://postgres:@localhost:/bitty_test")
         
         try:
             self.base.raw("""DROP TABLE people;""")
@@ -173,7 +173,8 @@ class PostgresTestCase(unittest.TestCase):
         self.assertRaises(InvalidDSN, self.base.get_adapter, 'foo')
         self.assertRaises(InvalidDSN, self.base.get_adapter, 'foo://bar')
         self.assertRaises(InvalidDSN, self.base.get_adapter, 'postgres://localhost/test')
-        self.assert_(isinstance(self.base.get_adapter("postgres://postgres:@localhost/bitty_test"), PostgresAdapter))
+        self.assert_(isinstance(self.base.get_adapter("postgres://postgres:@localhost:/bitty_test"), PostgresAdapter))
+        self.assert_(isinstance(self.base.get_adapter("postgres://postgres:@localhost:5432/bitty_test"), PostgresAdapter))
     
     def test_add(self):
         self.assertEqual(self.base.add('people', name='Daniel'), True)
@@ -223,7 +224,7 @@ class PostgresTestCase(unittest.TestCase):
 class MySQLTestCase(unittest.TestCase):
     def setUp(self):
         super(MySQLTestCase, self).setUp()
-        self.base = Bitty("mysql://root:@localhost/bitty_test")
+        self.base = Bitty("mysql://root:@localhost:/bitty_test")
         
         try:
             self.base.raw("""DROP TABLE people;""")
@@ -251,7 +252,8 @@ class MySQLTestCase(unittest.TestCase):
         self.assertRaises(InvalidDSN, self.base.get_adapter, 'foo')
         self.assertRaises(InvalidDSN, self.base.get_adapter, 'foo://bar')
         self.assertRaises(InvalidDSN, self.base.get_adapter, 'mysql://localhost/test')
-        self.assert_(isinstance(self.base.get_adapter("mysql://root:@localhost/bitty_test"), MySQLAdapter))
+        self.assert_(isinstance(self.base.get_adapter("mysql://root:@localhost:/bitty_test"), MySQLAdapter))
+        self.assert_(isinstance(self.base.get_adapter("mysql://root:@localhost:3306/bitty_test"), MySQLAdapter))
     
     def test_add(self):
         self.assertEqual(self.base.add('people', name='Daniel'), True)

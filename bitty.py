@@ -12,11 +12,11 @@ Example::
     
     bit = Bitty('sqlite:///home/code/my_database.db')
     
-    bitty.add('people', name='Claris', says='Moof!', age=37)
-    bitty.add('people', name='John Doe', says='No comment.', age=37)
+    bit.add('people', name='Claris', says='Moof!', age=37)
+    bit.add('people', name='John Doe', says='No comment.', age=37)
     
     # Select all.
-    for row in bitty.find('people'):
+    for row in bit.find('people'):
         print row['name']
     
     bit.close()
@@ -31,11 +31,11 @@ import re
 
 
 __author__ = 'Daniel Lindsley'
-__version__ = ('0', '5', '0', 'alpha')
+__version__ = ('0', '4', '1')
 
 
 FILESYSTEM_DSN = re.compile(r'^(?P<adapter>\w+)://(?P<path>.*)$')
-DAEMON_DSN = re.compile(r'^(?P<adapter>\w+)://(?P<user>[\w\d_.-]+):(?P<password>[\w\d_.-]*?)@(?P<host>.*?)/(?P<database>.*?)$')
+DAEMON_DSN = re.compile(r'^(?P<adapter>\w+)://(?P<user>[\w\d_.-]+):(?P<password>[\w\d_.-]*?)@(?P<host>.*?):(?P<port>\d*?)/(?P<database>.*?)$')
 
 
 class BittyError(Exception): pass
@@ -248,7 +248,7 @@ class PostgresAdapter(BaseSQLAdapter):
         details = match.groupdict()
         
         import psycopg2
-        return psycopg2.connect("dbname='%s' user='%s' host='%s' password='%s'" % (details['database'], details['user'], details['host'], details['password']))
+        return psycopg2.connect("dbname='%(database)s' user='%(user)s' password='%(password)s' host='%(host)s' port='%(port)s'" % details)
     
     def _get_column_names(self, table):
         query = "SELECT a.attname AS column \
@@ -293,6 +293,8 @@ class MySQLAdapter(BaseSQLAdapter):
                 connection_details['host'] = details['host']
             elif key == 'password':
                 connection_details['passwd'] = details['password']
+            elif key == 'port' and details['port']:
+                connection_details['port'] = int(details['port'])
         
         import MySQLdb
         return MySQLdb.connect(**connection_details)
@@ -325,7 +327,7 @@ class Bitty(object):
         
             * sqlite:///Users/daniellindsley/test.db
             * postgres://daniel:my_p4ss@localhost:5432/test_db
-            * mysql://daniel:my_p4ss@localhost/test_db
+            * mysql://daniel:my_p4ss@localhost:/test_db
         """
         self.dsn = dsn
         self.adapter = self.get_adapter()

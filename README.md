@@ -59,4 +59,5 @@ Serious Python Programmers™ with Enterprise Requirements need not apply.
 [1]: http://github.com/toastdriven/itty
 
 *author: Daniel Lindsley*
+
 *date: 2010-01-20*

@@ -12,5 +12,5 @@
   + ``FOO__contains``
 + Postgres backend. (v0.3)
 + MySQL backend. (v0.4)
-- JSON backend. (v0.3)
-- More examples. (v0.3)
+- JSON backend. (v0.5)
+- More examples. (v0.5)
